@@ -1,10 +1,5 @@
-# Trabalho final FSE
+Arquivo main:
+    - main/app_main.c
 
-# Grupo Embaçados
-
-Repositório dedicado à entrega do trabalho final de Fundamentos de Sistemas Embarcados
-
-# Tema do projeto - Estufa
-
-Wire.h
-https://github.com/esp8266/Arduino/tree/master/libraries/Wire
+JSON do dash:
+    - sprintf(telemetry_data, "{\"temperatura\":%.1f,\"maxTemperatura\":%.1f,\"minTemperatura\":%.1f,\"humidade\":%.1f,\"maxHumidade\":%.1f,\"minHumidade\":%.1f}", temperature, maxTemperature, minTemperature, humidity, maxHumidity, minHumidity);

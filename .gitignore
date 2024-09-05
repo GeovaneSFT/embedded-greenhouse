@@ -1,1 +1,5 @@
+build/
+.vscode
+.devcontainer
+
 estufa-esp32/build/
