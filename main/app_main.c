@@ -25,11 +25,70 @@
 #include "esp_log.h"
 #include "mqtt_client.h"
 
-//#include "dht_oled.h"
+#include "dht_oled.h"
+#include "dht.h"
+#include "ssd1306.h"
+#include "driver/i2c.h"
+#include "motion_led.h"
+#include "temperatura.h"
+
+#include <math.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/adc.h"
 
 static const char *TAG = "MQTT_EXAMPLE";
 
 esp_mqtt_client_handle_t client;
+
+// Define as constantes para o termistor NTC do sensor KY-013
+#define SERIES_RESISTOR 10000.0 // 10kΩ resistor em série
+#define B_COEFFICIENT 3950.0	// Coeficiente B do termistor
+#define ADC_MAX 4095			// Valor máximo do ADC (12 bits)
+#define SUPPLY_VOLTAGE 3.3		// Tensão de alimentação da ESP32
+
+void led_task(void *pvParameters){
+    led_main();
+    vTaskDelete(NULL);
+}
+
+// double Thermistor(int RawADC)
+// {
+// 	// Verifica se o valor do ADC é válido
+// 	if (RawADC <= 0 || RawADC >= ADC_MAX)
+// 	{
+// 		return NAN; // Retorna NaN se o valor do ADC for inválido
+// 	}
+
+// 	// Converte o valor ADC para uma tensão
+// 	double voltagem = (RawADC * SUPPLY_VOLTAGE) / ADC_MAX;
+
+// 	// Calcula a resistência do termistor com base na tensão lida
+// 	double resistencia = SERIES_RESISTOR * (SUPPLY_VOLTAGE / voltagem - 1.0);
+
+// 	// Verifica se a resistência calculada é razoável
+// 	if (resistencia <= 0.0)
+// 	{
+// 		return NAN; // Retorna NaN se a resistência calculada for inválida
+// 	}
+
+// 	// Aplica a equação de Steinhart-Hart para calcular a temperatura
+// 	double steinhart;
+// 	steinhart = resistencia / SERIES_RESISTOR; // (R/Ro)
+// 	steinhart = log(steinhart);				   // ln(R/Ro)
+// 	steinhart /= B_COEFFICIENT;				   // 1/B * ln(R/Ro)
+// 	steinhart += 1.0 / (25.0 + 273.15);		   // + (1/To), onde To é 25ºC em Kelvin
+// 	steinhart = 1.0 / steinhart;			   // Inverte
+// 	steinhart -= 273.15;					   // Converte para Celsius
+
+// 	return steinhart;
+// }
+
+// void init_adc()
+// {
+// 	adc1_config_width(ADC_WIDTH_BIT_12);
+// 	adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
+// }
 
 static void log_error_if_nonzero(const char *message, int error_code)
 {
@@ -185,8 +244,7 @@ void app_main(void)
     ESP_ERROR_CHECK(example_connect());
 
     mqtt_app_start();
-
-    //init_oled();
+    // init_oled();
 
     float temperature = 0.0;
     float humidity = 0.0;
@@ -194,16 +252,29 @@ void app_main(void)
     float minTemperature = 0.0;
     float maxHumidity = 0.0;
     float minHumidity = 0.0;
+    float analogicTemp = 0.0;
+
+    sensor_init();
+
+    xTaskCreate(led_task, "led_task", 2048, NULL, 5, NULL);
 
     while (1)
     {
         char telemetry_data[128];
 
-       // read_dht(&temperature, &humidity)
-       // display_oled(temperature, humidity);
+        // temperature += 1;
+        // humidity += 1;
+        minTemperature = 20;
+        minHumidity = 10;
+    // Loop para ler e exibir a temperatura e umidade
+        // Ler os dados do sensor DHT11
+        read_dht(&temperature, &humidity);
+        analogicTemp = thermistor_main(analogicTemp);
 
-        temperature = temperature + 1;
-        humidity = humidity + 1;
+        oled_main(temperature, humidity, analogicTemp);
+
+        // Exibir temperatura e umidade no display
+        // display_temperature_humidity(&dev, temperature, humidity);
 
         if (temperature > maxTemperature) {
             maxTemperature = temperature;
@@ -220,6 +291,7 @@ void app_main(void)
         }
 
         sprintf(telemetry_data, "{\"temperatura\":%.1f,\"maxTemperatura\":%.1f,\"minTemperatura\":%.1f,\"humidade\":%.1f,\"maxHumidade\":%.1f,\"minHumidade\":%.1f}", temperature, maxTemperature, minTemperature, humidity, maxHumidity, minHumidity);
+        ESP_LOGI(TAG, "TEMPERATURA E UMIDADE: %f %f", temperature, humidity);
         esp_mqtt_client_publish(client, "v1/devices/me/telemetry", telemetry_data, 0, 1, 0);
 
         // Wait for 2 seconds before next read

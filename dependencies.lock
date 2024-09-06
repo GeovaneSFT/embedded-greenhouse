@@ -1,14 +1,4 @@
 dependencies:
-  eil/esp_idf_lib_helpers:
-    component_hash: eaee96f02db1bea59d369e53e46fd100331eb9d1d9726416cace4dd01f72698e
-    dependencies:
-    - name: idf
-      require: private
-      version: '>=4.3'
-    source:
-      registry_url: https://components.espressif.com/
-      type: service
-    version: 1.2.1
   idf:
     source:
       type: idf
@@ -16,12 +6,11 @@ dependencies:
   protocol_examples_common:
     dependencies: []
     source:
-      path: /home/pedrocampos/esp/v5.3/esp-idf/examples/common_components/protocol_examples_common
+      path: /home/blimblim/esp/v5.3/esp-idf/examples/common_components/protocol_examples_common
       type: local
     version: '*'
 direct_dependencies:
-- eil/esp_idf_lib_helpers
 - protocol_examples_common
-manifest_hash: 3901b6d1a779a7a99fed28799928b4fdf5875ce2ec1f96c21706969ac34aabfc
+manifest_hash: 9a9520c926aa0a3e6ab6efa4fb14c3591e654d3887543776c1f730f359b02661
 target: esp32
 version: 2.0.0

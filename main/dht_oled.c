@@ -1,55 +1,67 @@
-// dht_oled.c
 #include <stdio.h>
-#include <u8g2_esp32_hal.h>
-#include <dht.h>
-#include "dht_oled.h"
-#include <stdint.h>
-#include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
-#include "esp_system.h"
-#include "nvs_flash.h"
-#include "esp_event.h"
-#include "esp_netif.h"
-#include "protocol_examples_common.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_log.h"
-#include "mqtt_client.h"
+#include "ssd1306.h"
+#include "font8x8_basic.h"
+#include "dht.h"  // Usando a biblioteca dht.h
+#include "driver/gpio.h"
 
+#define TAG "SSD1306"
+#define DHT_GPIO 25   // GPIO usado para o DHT11
 
-#define DHT_GPIO 15       // GPIO for DHT11
-#define I2C_SDA 21        // I2C SDA Pin
-#define I2C_SCL 22        // I2C SCL Pin
-
-static u8g2_t u8g2;
-
-void init_oled() {
-    u8g2_esp32_hal_t u8g2_esp32_hal = U8G2_ESP32_HAL_DEFAULT;
-    u8g2_esp32_hal.bus.i2c.sda = I2C_SDA;
-    u8g2_esp32_hal.bus.i2c.scl = I2C_SCL;
-    u8g2_esp32_hal_init(u8g2_esp32_hal);
-
-    u8g2_SetI2CAddress(&u8g2.u8x8, 0x78); // OLED address (shifted)
-    u8g2_InitDisplay(&u8g2);
-    u8g2_SetPowerSave(&u8g2, 0);
-    u8g2_SetFont(&u8g2, u8g2_font_ncenB08_tr);
-}
-
+// Função para ler os dados do DHT11
 void read_dht(float *temperature, float *humidity) {
-    if (dht_read_float_data(DHT_TYPE_DHT11, DHT_GPIO, humidity, temperature) != ESP_OK) {
-        ESP_LOGE("DHT", "Failed to read data from DHT sensor");
-    }
+    dht_read_float_data(DHT_TYPE_DHT11, DHT_GPIO, humidity, temperature);
 }
 
-void display_oled(float temperature, float humidity) {
-    u8g2_ClearBuffer(&u8g2);
+// Função para exibir temperatura e umidade no display OLED
+void display_temperature_humidity(SSD1306_t *dev, float temperature, float humidity, float analogicTemp) {
+    char buffer[20];
     
-    char temp_str[16];
-    char hum_str[16];
+    ssd1306_clear_screen(dev, false);
 
-    sprintf(temp_str, "Temp: %.1f C", temperature);
-    sprintf(hum_str, "Humidity: %.1f %%", humidity);
+    // Exibir a temperatura
+    sprintf(buffer, "Temp: %.1fC", temperature);
+    ssd1306_display_text(dev, 0, buffer, strlen(buffer), false);
 
-    u8g2_DrawStr(&u8g2, 0, 20, temp_str);
-    u8g2_DrawStr(&u8g2, 0, 40, hum_str);
+    // Exibir a umidade
+    sprintf(buffer, "Humid: %.1f%%", humidity);
+    ssd1306_display_text(dev, 1, buffer, strlen(buffer), false);
 
-    u8g2_SendBuffer(&u8g2);
+    sprintf(buffer, "Analogic: %.1fC", analogicTemp);
+    ssd1306_display_text(dev, 2, buffer, strlen(buffer), false);
+}
+
+void oled_main(float temperature, float humidity, float analogicTemp)
+{
+    // Inicializando o display OLED
+    SSD1306_t dev;
+    ESP_LOGI(TAG, "Initializing OLED...");
+
+#if CONFIG_I2C_INTERFACE
+    ESP_LOGI(TAG, "Using I2C interface");
+    i2c_master_init(&dev, CONFIG_SDA_GPIO, CONFIG_SCL_GPIO, CONFIG_RESET_GPIO);
+#endif // CONFIG_I2C_INTERFACE
+
+#if CONFIG_SPI_INTERFACE
+    ESP_LOGI(TAG, "Using SPI interface");
+    spi_master_init(&dev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO);
+#endif // CONFIG_SPI_INTERFACE
+
+#if CONFIG_SSD1306_128x64
+    ssd1306_init(&dev, 128, 64);
+#endif
+#if CONFIG_SSD1306_128x32
+    ssd1306_init(&dev, 128, 32);
+#endif
+
+    ssd1306_clear_screen(&dev, false);
+    ssd1306_contrast(&dev, 0xff);
+        // Exibir temperatura e umidade no display
+    display_temperature_humidity(&dev, temperature, humidity, analogicTemp);
+
+        // Aguardar 2 segundos antes de ler novamente
 }
