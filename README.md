@@ -2,6 +2,11 @@
 
 Este repositório contém dois projetos independentes, baseados em placas ESP32, que se comunicam via MQTT e enviam dados de sensores para a plataforma ThingsBoard. Ambos os projetos foram desenvolvidos usando a biblioteca ESP-IDF no VSCode, com foco em economia de energia, armazenamento interno (NVS) e comunicação eficiente.
 
+## Apresentação do projeto
+
+O vídeo referente a apresentação do projeto pode ser encontrado nesse [link](https://youtu.be/N875RAy_jwo).
+
+
 ## Estrutura do Projeto
 
 O repositório é dividido em duas pastas principais, cada uma correspondendo a uma das placas ESP32:
