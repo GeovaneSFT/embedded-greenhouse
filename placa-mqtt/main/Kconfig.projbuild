@@ -1,0 +1,19 @@
+menu "Example Configuration"
+
+    config BROKER_URL
+        string "Broker URL"
+        default "mqtt://164.41.98.25"
+        help
+            URL of the broker to connect to
+
+    config BROKER_URL_FROM_STDIN
+        bool
+        default y if BROKER_URL = "FROM_STDIN"
+
+    config BROKER_USERNAME
+        string "Broker USERNAME"
+        default "0bBzQsrYbDDW22GT7Fr1"
+        help
+            Thingsboard device token
+
+endmenu
