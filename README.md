@@ -6,9 +6,9 @@ Este repositório contém dois projetos independentes, baseados em placas ESP32,
 
 O repositório é dividido em duas pastas principais, cada uma correspondendo a uma das placas ESP32:
 
-- **MQTT Broker Board**: Esta pasta contém o projeto da placa responsável por atuar como broker interno de MQTT. Ela gerencia a comunicação entre as duas placas e permite que os comandos sejam enviados para a placa sensora.
+- **Placa-mqtt**: Esta pasta contém o projeto da placa responsável por atuar como broker interno de MQTT. Ela gerencia a comunicação entre as duas placas e permite que os comandos sejam enviados para a placa sensora.
 
-- **ThingsBoard Sensor Board**: Nesta pasta está o projeto da placa responsável por coletar dados de diversos sensores e enviá-los para a plataforma ThingsBoard via MQTT. Esta placa também implementa o ModSleep para economia de energia e utiliza o NVS (Non-Volatile Storage) para armazenamento interno de dados.
+- **Main**: Nesta pasta está o projeto da placa responsável por coletar dados de diversos sensores e enviá-los para a plataforma ThingsBoard via MQTT. Esta placa também implementa o Modo Sleep para economia de energia e utiliza o NVS (Non-Volatile Storage) para armazenamento interno de dados.
 
 ## Funcionalidades
 
@@ -22,7 +22,7 @@ O repositório é dividido em duas pastas principais, cada uma correspondendo a 
 
 1. Compile e faça o flash de cada projeto na respectiva placa ESP32.
 
-2. Abra cada placa de preferencia em um ambiente separado do VSCode.
+2. Abra cada placa de preferência em um ambiente separado do VSCode.
 
 3. Abra o dashboard para verificar o funcionamento de cada sensor
 
