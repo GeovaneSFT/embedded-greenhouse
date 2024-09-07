@@ -21,9 +21,10 @@ extern unsigned long ledOnTime;
 
 // Funções de controle do LED
 void ledc_init(void);
-void led_control(bool state);
-void check_led_timeout(void);
-void sensor_init(void);
-void led_main(void);
+void pir_init(void);
+void pir_read(float, float);
+void set_rgb_color(uint8_t, uint8_t, uint8_t);
+void set_color_based_on_temperature(float);
+void led_main(float temperature, float humidity);
 
 #endif // MOTION_LED_H

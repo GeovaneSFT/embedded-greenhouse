@@ -22,8 +22,9 @@
 #include "esp_netif.h"
 #include "protocol_examples_common.h"
 
-#include "esp_log.h"
 #include "mqtt_client.h"
+#include "esp_log.h"
+#include "nvs_logger.h"
 
 #include "dht_oled.h"
 #include "dht.h"
@@ -31,6 +32,8 @@
 #include "driver/i2c.h"
 #include "motion_led.h"
 #include "temperatura.h"
+#include "wifi.h"
+#include "sleep.h"
 
 #include <math.h>
 #include "freertos/FreeRTOS.h"
@@ -38,8 +41,28 @@
 #include "driver/adc.h"
 
 static const char *TAG = "MQTT_EXAMPLE";
+static const char *TAG_BROKER = "MQTT_SUBSCRIBER";
+
+float minHumidity = 0.0;
+float minTemperature = 0.0;
+float maxHumidity = 0.0;
+float maxTemperature = 0.0;
+float analogicTemp = 0;
 
 esp_mqtt_client_handle_t client;
+esp_mqtt_client_handle_t mosquitto;
+
+typedef struct pir_data_t {
+    float temperature;
+    float humidity;
+} pir_data_t;
+
+struct pir_data_t pir = {
+    .temperature = 0,
+    .humidity = 0
+};
+
+int prev_pir_value = 0;
 
 // Define as constantes para o termistor NTC do sensor KY-013
 #define SERIES_RESISTOR 10000.0 // 10kΩ resistor em série
@@ -47,56 +70,51 @@ esp_mqtt_client_handle_t client;
 #define ADC_MAX 4095			// Valor máximo do ADC (12 bits)
 #define SUPPLY_VOLTAGE 3.3		// Tensão de alimentação da ESP32
 
-void led_task(void *pvParameters){
-    led_main();
-    vTaskDelete(NULL);
+void pir_led_task(void *pvParameters) {
+    pir_data_t *pir = (pir_data_t *)pvParameters;  // Conversão do ponteiro para estrutura
+
+    ledc_init();
+    pir_init();
+
+    while(1) {
+        // Leitura do PIR com base nos dados de temperatura e umidade
+        pir_read(pir->temperature, pir->humidity);  // Controle do LED baseado no PIR e temperatura
+        vTaskDelay(pdMS_TO_TICKS(500)); // Delay de 3 segundos
+    }
+
+    vTaskDelete(NULL);  // Deleta a task (embora aqui seja um loop infinito)
 }
 
-// double Thermistor(int RawADC)
-// {
-// 	// Verifica se o valor do ADC é válido
-// 	if (RawADC <= 0 || RawADC >= ADC_MAX)
-// 	{
-// 		return NAN; // Retorna NaN se o valor do ADC for inválido
-// 	}
-
-// 	// Converte o valor ADC para uma tensão
-// 	double voltagem = (RawADC * SUPPLY_VOLTAGE) / ADC_MAX;
-
-// 	// Calcula a resistência do termistor com base na tensão lida
-// 	double resistencia = SERIES_RESISTOR * (SUPPLY_VOLTAGE / voltagem - 1.0);
-
-// 	// Verifica se a resistência calculada é razoável
-// 	if (resistencia <= 0.0)
-// 	{
-// 		return NAN; // Retorna NaN se a resistência calculada for inválida
-// 	}
-
-// 	// Aplica a equação de Steinhart-Hart para calcular a temperatura
-// 	double steinhart;
-// 	steinhart = resistencia / SERIES_RESISTOR; // (R/Ro)
-// 	steinhart = log(steinhart);				   // ln(R/Ro)
-// 	steinhart /= B_COEFFICIENT;				   // 1/B * ln(R/Ro)
-// 	steinhart += 1.0 / (25.0 + 273.15);		   // + (1/To), onde To é 25ºC em Kelvin
-// 	steinhart = 1.0 / steinhart;			   // Inverte
-// 	steinhart -= 273.15;					   // Converte para Celsius
-
-// 	return steinhart;
-// }
-
-// void init_adc()
-// {
-// 	adc1_config_width(ADC_WIDTH_BIT_12);
-// 	adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
-// }
-
-static void log_error_if_nonzero(const char *message, int error_code)
-{
-    if (error_code != 0)
-    {
+static void log_error_if_nonzero(const char *message, int error_code) {
+    if (error_code != 0) {
         ESP_LOGE(TAG, "Last error %s: 0x%x", message, error_code);
+        enqueue_log(message, error_code);  // Enfileirar o log
     }
 }
+
+void dht_task(void *pvParameters) {
+    pir_data_t *pir = (pir_data_t *)pvParameters;  // Conversão do ponteiro para estrutura
+
+    while(1) {
+        // Leitura do DHT11 com base nos dados de temperatura e umidade
+        read_dht(&pir->temperature, &pir->humidity);
+        oled_main(pir->temperature, pir->humidity, analogicTemp);  // Controle do LED baseado no DHT11 e temperatura
+        vTaskDelay(pdMS_TO_TICKS(5000)); // Delay de 1 segundo
+    }
+
+    vTaskDelete(NULL);  // Deleta a task (embora aqui seja um loop infinito)
+}
+
+void thermistor_task(void *pvParameters) {
+    while (1) {
+        analogicTemp = thermistor_main(analogicTemp);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
+    vTaskDelete(NULL);  // Deleta a task (embora aqui seja um loop infinito)
+}
+
+
 
 /*
  * @brief Event handler registered to receive MQTT events
@@ -118,17 +136,20 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-        msg_id = esp_mqtt_client_publish(client, "/topic/qos1", "data_3", 0, 1, 0);
-        ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+        // msg_id = esp_mqtt_client_publish(client, "/topic/qos1", "data_3", 0, 1, 0);
+        // ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
 
         msg_id = esp_mqtt_client_publish(client, "v1/devices/me/telemetry", "{\"temperatura\":25,\"humidity\":50}", 0, 1, 0);
         ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
 
-        msg_id = esp_mqtt_client_subscribe(client, "/topic/qos0", 0);
-        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+        msg_id = esp_mqtt_client_subscribe(client, "verificador-umidade/sensores/placa1", 1);
+        ESP_LOGI(TAG_BROKER, "Subscribed to verificador_umidade/sensores/placa1");
 
-        msg_id = esp_mqtt_client_subscribe(client, "/topic/qos1", 1);
-        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+
+        // msg_id = esp_mqtt_client_subscribe(client, "/topic/qos0", 0);
+        // ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+
+
 
         break;
     case MQTT_EVENT_DISCONNECTED:
@@ -136,9 +157,12 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         break;
 
     case MQTT_EVENT_SUBSCRIBED:
-        ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
-        msg_id = esp_mqtt_client_publish(client, "/topic/qos0", "data", 0, 0, 0);
-        ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+        // ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
+        // msg_id = esp_mqtt_client_publish(client, "/topic/qos0", "data", 0, 0, 0);
+        // ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+        // msg_id = esp_mqtt_client_subscribe(client, "umidade/sensores/placa1", 1);
+        // ESP_LOGI(TAG_BROKER, "Subscribed to umidade/sensores/placa1");
+
         break;
     case MQTT_EVENT_UNSUBSCRIBED:
         ESP_LOGI(TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);
@@ -148,17 +172,18 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         break;
     case MQTT_EVENT_DATA:
         ESP_LOGI(TAG, "MQTT_EVENT_DATA");
-        printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
-        printf("DATA=%.*s\r\n", event->data_len, event->data);
+        ESP_LOGI(TAG_BROKER, "RECEIVED MESSAGE: TOPIC: %.*s", event->topic_len, event->topic);
+        ESP_LOGI(TAG_BROKER, "RECEIVED MESSAGE: DATA: %.*s", event->data_len, event->data);
+
         break;
     case MQTT_EVENT_ERROR:
-        ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
+        ESP_LOGI(TAG_BROKER, "MQTT_EVENT_ERROR");
         if (event->error_handle->error_type == MQTT_ERROR_TYPE_TCP_TRANSPORT)
         {
             log_error_if_nonzero("reported from esp-tls", event->error_handle->esp_tls_last_esp_err);
             log_error_if_nonzero("reported from tls stack", event->error_handle->esp_tls_stack_err);
             log_error_if_nonzero("captured as transport's socket errno", event->error_handle->esp_transport_sock_errno);
-            ESP_LOGI(TAG, "Last errno string (%s)", strerror(event->error_handle->esp_transport_sock_errno));
+            ESP_LOGI(TAG_BROKER, "Last errno string (%s)", strerror(event->error_handle->esp_transport_sock_errno));
         }
         break;
     default:
@@ -167,11 +192,46 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     }
 }
 
+void message_receiver(esp_mqtt_event_handle_t receive) {
+    ESP_LOGI(TAG, "RECEIVED MESSAGE: TOPIC: %.*s", receive->topic_len, receive->topic);
+    ESP_LOGI(TAG, "RECEIVED MESSAGE: DATA: %.*s", receive->data_len, receive->data);
+
+    // Parse the JSON manually (for simplicity, assuming the message format is correct)
+    if (strstr(receive->data, "\"minTemperatura\":") && strstr(receive->data, "\"minUmidade\":")) {
+        char *minTemp_ptr = strstr(receive->data, "\"minTemperatura\":");
+        char *minHumidity_ptr = strstr(receive->data, "\"minUmidade\":");
+
+        if (minTemp_ptr && minHumidity_ptr) {
+            sscanf(minTemp_ptr, "\"minTemperatura\":%f", &minTemperature);
+            sscanf(minHumidity_ptr, "\"minUmidade\":%f", &minHumidity);
+
+            ESP_LOGI(TAG, "Parsed minTemperature: %.1f, minHumidity: %.1f", minTemperature, minHumidity);
+        } else {
+            ESP_LOGE(TAG, "Failed to find minTemperatura or minUmidade in JSON");
+        }
+    }
+}
+
+
+
 static void mqtt_app_start(void)
 {
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = "mqtt://164.41.98.25",
         .credentials.username = "0bBzQsrYbDDW22GT7Fr1"};
+
+    client = esp_mqtt_client_init(&mqtt_cfg);
+    esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
+    esp_mqtt_client_start(client);
+
+    esp_mqtt_client_config_t mqtt_mosquitto = {
+        .broker.address.uri = "mqtt://test.mosquitto.org",
+    };
+
+    mosquitto = esp_mqtt_client_init(&mqtt_mosquitto);
+    esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
+    esp_mqtt_client_start(mosquitto);
+
 #if CONFIG_BROKER_URL_FROM_STDIN
     char line[128];
 
@@ -243,58 +303,54 @@ void app_main(void)
      */
     ESP_ERROR_CHECK(example_connect());
 
+    // wifi_start()// ;
+
     mqtt_app_start();
     // init_oled();
 
-    float temperature = 0.0;
-    float humidity = 0.0;
+    init_sleep_mode();
+
+    pir.temperature = 0.0;
+    pir.humidity = 0.0;
+
     float maxTemperature = 0.0;
-    float minTemperature = 0.0;
-    float maxHumidity = 0.0;
-    float minHumidity = 0.0;
-    float analogicTemp = 0.0;
+//     float maxHumidity = 0.0;
+//     float analogicTemp = 0.0;
 
-    sensor_init();
+    //Task do PIR e LED
+    oled_init();
+    xTaskCreate(pir_led_task, "pir_led_task", 4096, &pir, 5, NULL);
+    xTaskCreate(dht_task, "dht_task", 4096, &pir, 5, NULL);
+    xTaskCreate(thermistor_task, "thermistor_task", 4096, &pir, 5, NULL);
 
-    xTaskCreate(led_task, "led_task", 2048, NULL, 5, NULL);
-
+    nvs_logger_init();
+    
     while (1)
     {
         char telemetry_data[128];
 
-        // temperature += 1;
-        // humidity += 1;
-        minTemperature = 20;
-        minHumidity = 10;
-    // Loop para ler e exibir a temperatura e umidade
-        // Ler os dados do sensor DHT11
-        read_dht(&temperature, &humidity);
-        analogicTemp = thermistor_main(analogicTemp);
+        check_button_and_sleep();
+        message_receiver(mosquitto);
 
-        oled_main(temperature, humidity, analogicTemp);
-
-        // Exibir temperatura e umidade no display
-        // display_temperature_humidity(&dev, temperature, humidity);
-
-        if (temperature > maxTemperature) {
-            maxTemperature = temperature;
+        if (pir.temperature > maxTemperature) {
+            maxTemperature = pir.temperature;
         }
-        if (temperature < minTemperature) {
-            minTemperature = temperature;
+        else if (pir.temperature < minTemperature) {
+            minTemperature = pir.temperature;
         }
 
-        if (humidity > maxHumidity) {
-            maxHumidity = humidity;
+        if (pir.humidity > maxHumidity) {
+            maxHumidity = pir.humidity;
         }
-        if (humidity < minHumidity) {
-            minHumidity = humidity;
-        }
+        else if (pir.humidity < minHumidity) {
+            minHumidity = pir.humidity;
+        };
 
-        sprintf(telemetry_data, "{\"temperatura\":%.1f,\"maxTemperatura\":%.1f,\"minTemperatura\":%.1f,\"humidade\":%.1f,\"maxHumidade\":%.1f,\"minHumidade\":%.1f}", temperature, maxTemperature, minTemperature, humidity, maxHumidity, minHumidity);
-        ESP_LOGI(TAG, "TEMPERATURA E UMIDADE: %f %f", temperature, humidity);
+        sprintf(telemetry_data, "{\"temperatura\":%.1f,\"maxTemperatura\":%.1f,\"minTemperatura\":%.1f,\"umidade\":%.1f,\"maxUmidade\":%.1f,\"minUmidade\":%.1f}", pir.temperature, maxTemperature, minTemperature, pir.humidity, maxHumidity, minHumidity);
+        ESP_LOGI(TAG, "TEMPERATURA E UMIDADE: %f %f", pir.temperature, pir.humidity);
         esp_mqtt_client_publish(client, "v1/devices/me/telemetry", telemetry_data, 0, 1, 0);
 
-        // Wait for 2 seconds before next read
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        // Wait for 10 seconds before next read
+        vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }

@@ -14,6 +14,10 @@
 #define SUPPLY_VOLTAGE 3.3		// Tensão de alimentação da ESP32
 
 int sensorPin = 34;
+int Vo;
+float R1 = 10000;
+float logR2, R2, T;
+float c1 = 0.001129148, c2 = 0.000234125, c3 = 0.0000000876741;
 
 void init_adc()
 {
@@ -21,46 +25,26 @@ void init_adc()
 	adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_11);
 }
 
-double Thermistor(int RawADC)
+double Thermistor(int Vo)
 {
-	// Verifica se o valor do ADC é válido
-	if (RawADC <= 0 || RawADC >= ADC_MAX)
-	{
-		return NAN; // Retorna NaN se o valor do ADC for inválido
-	}
-
-	// Converte o valor ADC para uma tensão
-	double voltagem = (RawADC * SUPPLY_VOLTAGE) / ADC_MAX;
-
-	// Calcula a resistência do termistor com base na tensão lida
-	double resistencia = SERIES_RESISTOR * (SUPPLY_VOLTAGE / voltagem - 1.0);
-
-	// Verifica se a resistência calculada é razoável
-	if (resistencia <= 0.0)
-	{
-		return NAN; // Retorna NaN se a resistência calculada for inválida
-	}
-
-	// Aplica a equação de Steinhart-Hart para calcular a temperatura
-	double steinhart;
-	steinhart = resistencia / SERIES_RESISTOR; // (R/Ro)
-	steinhart = log(steinhart);				   // ln(R/Ro)
-	steinhart /= B_COEFFICIENT;				   // 1/B * ln(R/Ro)
-	steinhart += 1.0 / (25.0 + 273.15);		   // + (1/To), onde To é 25ºC em Kelvin
-	steinhart = 1.0 / steinhart;			   // Inverte
-	steinhart -= 273.15;					   // Converte para Celsius
-
-	return steinhart;
+ R2 = R1 * Vo/(1023 - Vo);
+ logR2 = log(R2);
+ T = 1.0 /(c1 + c2*logR2 + c3*logR2*logR2*logR2);
+ T = T - 273.15; // convert from Kelvin to Celsius
+ return T;
 }
+
+int Vo;
+
 
 float thermistor_main(float analogicTemp)
 {
 	init_adc();
 
-    int adcValue = adc1_get_raw(ADC1_CHANNEL_6);
-    ESP_LOGI(TAG, "Valor do ADC: %d", adcValue); // Imprime o valor do ADC
+    Vo = adc1_get_raw(ADC1_CHANNEL_6);
+    ESP_LOGI(TAG, "Valor do ADC: %d", Vo); // Imprime o valor do ADC
 
-    analogicTemp = Thermistor(adcValue);
+    analogicTemp = Thermistor(Vo);
     if (isnan(analogicTemp))
     {
         ESP_LOGI(TAG, "Leitura inválida do ADC.");

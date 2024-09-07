@@ -12,6 +12,8 @@
 #define TAG "SSD1306"
 #define DHT_GPIO 25   // GPIO usado para o DHT11
 
+SSD1306_t dev;
+
 // Função para ler os dados do DHT11
 void read_dht(float *temperature, float *humidity) {
     dht_read_float_data(DHT_TYPE_DHT11, DHT_GPIO, humidity, temperature);
@@ -19,7 +21,7 @@ void read_dht(float *temperature, float *humidity) {
 
 // Função para exibir temperatura e umidade no display OLED
 void display_temperature_humidity(SSD1306_t *dev, float temperature, float humidity, float analogicTemp) {
-    char buffer[20];
+    char buffer[50];
     
     ssd1306_clear_screen(dev, false);
 
@@ -35,10 +37,9 @@ void display_temperature_humidity(SSD1306_t *dev, float temperature, float humid
     ssd1306_display_text(dev, 2, buffer, strlen(buffer), false);
 }
 
-void oled_main(float temperature, float humidity, float analogicTemp)
+void oled_init()
 {
     // Inicializando o display OLED
-    SSD1306_t dev;
     ESP_LOGI(TAG, "Initializing OLED...");
 
 #if CONFIG_I2C_INTERFACE
@@ -58,10 +59,13 @@ void oled_main(float temperature, float humidity, float analogicTemp)
     ssd1306_init(&dev, 128, 32);
 #endif
 
+}
+
+void oled_main(float temperature, float humidity, float analogicTemp)
+{
+
     ssd1306_clear_screen(&dev, false);
     ssd1306_contrast(&dev, 0xff);
-        // Exibir temperatura e umidade no display
     display_temperature_humidity(&dev, temperature, humidity, analogicTemp);
 
-        // Aguardar 2 segundos antes de ler novamente
 }
