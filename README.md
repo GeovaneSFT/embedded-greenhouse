@@ -1,41 +1,41 @@
-# Projeto Estufa Embarcados
+# Greenhouse Embedded Project
 
-Este repositório contém dois projetos independentes, baseados em placas ESP32, que se comunicam via MQTT e enviam dados de sensores para a plataforma ThingsBoard. Ambos os projetos foram desenvolvidos usando a biblioteca ESP-IDF no VSCode, com foco em economia de energia, armazenamento interno (NVS) e comunicação eficiente.
+This repository contains two independent projects, based on ESP32 boards, that communicate via MQTT and send sensor data to the ThingsBoard platform. Both projects were developed using the ESP-IDF library in VSCode, focusing on energy efficiency, internal storage (NVS), and efficient communication.
 
-## Apresentação do projeto
+## Project Presentation
 
-O vídeo referente a apresentação do projeto pode ser encontrado nesse [link](https://youtu.be/N875RAy_jwo).
-
-
-## Estrutura do Projeto
-
-O repositório é dividido em duas pastas principais, cada uma correspondendo a uma das placas ESP32:
-
-- **Placa-mqtt**: Esta pasta contém o projeto da placa responsável por atuar como broker interno de MQTT. Ela gerencia a comunicação entre as duas placas e permite que os comandos sejam enviados para a placa sensora.
-
-- **Main**: Nesta pasta está o projeto da placa responsável por coletar dados de diversos sensores e enviá-los para a plataforma ThingsBoard via MQTT. Esta placa também implementa o Modo Sleep para economia de energia e utiliza o NVS (Non-Volatile Storage) para armazenamento interno de dados.
-
-## Funcionalidades
-
-- **MQTT**: Implementamos um broker MQTT interno para garantir a comunicação eficiente entre as duas placas ESP32, sem depender de serviços externos.
-- **ThingsBoard Integration**: A placa sensora coleta dados e os envia diretamente para a plataforma ThingsBoard, facilitando o monitoramento remoto da estufa.
-- **ModSleep**: Para otimizar o consumo de energia, as duas placas utilizam o modo de sono profundo (ModSleep), ativando apenas quando necessário.
-- **NVS (Non-Volatile Storage)**: Armazenamento interno utilizado para salvar dados de configuração e estado entre reinicializações.
-
-## Como usar
+The video presentation of the project can be found at this [link](https://youtu.be/N875RAy_jwo).
 
 
-1. Compile e faça o flash de cada projeto na respectiva placa ESP32.
+## Project Structure
 
-2. Abra cada placa de preferência em um ambiente separado do VSCode.
+The repository is divided into two main folders, each corresponding to one of the ESP32 boards:
 
-3. Abra o dashboard para verificar o funcionamento de cada sensor
+- **Board-mqtt**: This folder contains the project for the board responsible for acting as the internal MQTT broker. It manages communication between the two boards and allows commands to be sent to the sensor board.
 
-## Requisitos
+- **Main**: This folder contains the project for the board responsible for collecting data from various sensors and sending them to the ThingsBoard platform via MQTT. This board also implements Sleep Mode for energy savings and uses NVS (Non-Volatile Storage) for internal data storage.
 
-- ESP32 com suporte a ESP-IDF.
-- Biblioteca ESP-IDF instalada no VSCode.
-- Plataforma ThingsBoard configurada para receber os dados da estufa.
+## Features
+
+- **MQTT**: We implemented an internal MQTT broker to ensure efficient communication between the two ESP32 boards without relying on external services.
+- **ThingsBoard Integration**: The sensor board collects data and sends it directly to the ThingsBoard platform, making remote monitoring of the greenhouse easy.
+- **ModSleep**: To optimize energy consumption, both boards use deep sleep mode (ModSleep), waking up only when necessary.
+- **NVS (Non-Volatile Storage)**: Internal storage used to save configuration data and states between reboots.
+
+## How to use
+
+
+1. Compile and flash each project on its respective ESP32 board.
+
+2. Open each board in a separate VSCode environment for better management.
+
+3. Open the dashboard to check the operation of each sensor.
+
+## Requirements
+
+- ESP32 with ESP-IDF support.
+- ESP-IDF library installed in VSCode.
+- ThingsBoard platform configured to receive data.
 
 
 
