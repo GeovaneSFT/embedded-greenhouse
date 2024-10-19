@@ -11,7 +11,7 @@ The video presentation of the project can be found at this [link](https://youtu.
 
 The repository is divided into two main folders, each corresponding to one of the ESP32 boards:
 
-- **Board-mqtt**: This folder contains the project for the board responsible for acting as the internal MQTT broker. It manages communication between the two boards and allows commands to be sent to the sensor board.
+- **placa-mqtt**: This folder contains the project for the board responsible for acting as the internal MQTT broker. It manages communication between the two boards and allows commands to be sent to the sensor board.
 
 - **Main**: This folder contains the project for the board responsible for collecting data from various sensors and sending them to the ThingsBoard platform via MQTT. This board also implements Sleep Mode for energy savings and uses NVS (Non-Volatile Storage) for internal data storage.
 
